@@ -23,17 +23,23 @@ def build_graph(instaglam0):
     return G
 
 
-def calc_buying_probability(G, spotifly, artistID):
-    for n in G.nodes:
+def calc_buying_probability(G, spotifly, artistID, nodes_group, test_flag=False):
+    for n in nodes_group:
         nt = G.degree(n)
         bt = len([v for v in G.neighbors(n) if G.nodes[v]["infected"]])
         filt = (spotifly['userID'] == n) & (spotifly[' artistID'] == artistID)
         h = 0 if spotifly.loc[filt, '#plays'].empty else list(spotifly.loc[filt, '#plays'])[0]
         #print(f"{nt},{bt},{h}")
-        if h == 0:
-            G.nodes[n]["buying probability"] = bt / nt
+        if test_flag:
+            if h == 0:
+                G.nodes[n]["buying probability test"] = bt / nt
+            else:
+                G.nodes[n]["buying probability test"] = ((h * bt) / (1000 * nt))
         else:
-            G.nodes[n]["buying probability"] = ((h * bt) / (1000 * nt))
+            if h == 0:
+                G.nodes[n]["buying probability"] = bt / nt
+            else:
+                G.nodes[n]["buying probability"] = ((h * bt) / (1000 * nt))
         # if G.nodes[n]['buying probability'] > 0:
         #    print(f"{n}, {G.nodes[n]['buying probability']}")
 
@@ -45,13 +51,21 @@ def IC(S, G):
     :param G: graph
     :return: influence cone rank of S
     """
-    influence_cone = 0
+    influence_cone = len(S)
+    for s in S:
+        G.nodes[s]["infected test"] = True
+    test_group = set([j for s in S for j in G.neighbors(s)])
+    # print("test_group:", test_group)
+    calc_buying_probability(G, spotifly, artist, test_group, test_flag=True)
     visited_neighbors = set()
     for s in S:
         for n in G.neighbors(s):
             if n not in visited_neighbors:
-                influence_cone += G.nodes[n]["buying probability"]
+                influence_cone += G.nodes[n]["buying probability test"]
                 visited_neighbors.add(n)
+    for s in S:
+        G.nodes[s]["infected test"] = False
+    # print("IC =", influence_cone)
     return influence_cone
 
 
@@ -66,8 +80,12 @@ def hill_climbing(G, k):
     for i in range(k):
         argmax_mv = None
         max_mv = -1
-        for v in set(G.nodes).difference(S):
-            IC_S = IC(S, G)
+        IC_S = IC(S, G)
+        V_difference_S = set(G.nodes).difference(S)
+        count = 0
+        for v in V_difference_S:
+            # print(f"i = {i}, count = {count}")
+            count += 1
             S.add(v)
             IC_Sv = IC(S, G)
             S.remove(v)
@@ -76,6 +94,7 @@ def hill_climbing(G, k):
                 max_mv = mv
                 argmax_mv = v
         S.add(argmax_mv)
+    # print("S:", S)
     return S
 
 
@@ -86,6 +105,8 @@ if __name__ == '__main__':
     G = build_graph(instaglam0)
     nx.set_node_attributes(G, 0, name="buying probability")
     nx.set_node_attributes(G, False, name="infected")
+    nx.set_node_attributes(G, 0, name="buying probability test")
+    nx.set_node_attributes(G, False, name="infected test")
 
     for artist in artists_to_promote:
         print(f"artist={artist}")
@@ -96,10 +117,10 @@ if __name__ == '__main__':
         influencers = hill_climbing(G, 5)
         infected_cnt = 5
         infected_list = [i for i in influencers]
-        #print(f"influencers: {influencers}\n")
+        print(f"influencers: {influencers}\n")
         for influncer in influencers:
             G.nodes[influncer]["infected"] = True
-        calc_buying_probability(G, spotifly, artist)
+        calc_buying_probability(G, spotifly, artist, G.nodes)
         for t in range(1, 7):
             for node in G.nodes:
                 u = random.random()
@@ -107,7 +128,7 @@ if __name__ == '__main__':
                     G.nodes[node]["infected"] = True
                     infected_cnt += 1
                     infected_list.append(node)
-            calc_buying_probability(G, spotifly, artist)
+            calc_buying_probability(G, spotifly, artist, G.nodes)
             print(f"infected at time {t}: {infected_cnt}")
             #print(infected_list)
 
