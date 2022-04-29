@@ -5,8 +5,8 @@ The list of ids you get is the list of artists you need to promote.
 
 ####################
 # TODO: change this
-ID1 = '000000000'
-ID2 = '000000000'
+ID1 = '206574733'
+ID2 = '208634469'
 ####################
 
 x = (int(ID1[-1]) + int(ID2[-1])) % 5

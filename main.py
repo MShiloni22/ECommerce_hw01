@@ -1,3 +1,4 @@
+import networkx
 import numpy as np
 import networkx as nx
 import random
@@ -100,15 +101,29 @@ def hill_climbing(G, k):
     # print("S:", S)
     return S
 
-"""
-def prob_for_new_edges():
-    for n1 in G.nodes:
-        for n2 in G.nodes:
-            if n1.key < n2.key and there is no edge between n1 and n2:
-                prob[n1][n2] = prob[n2][n1] = (neighbors(n1) cut neighbors(n2)) / ( neighbors(n1) union neighbors(n2) )       
-"""
+
+def add_new_edges(G: networkx.Graph, P):
+    """
+    add new edges to graph G based on new edges probability matrix P
+    :param G: instaglam graph at time t=0
+    :param P: new edges probability matrix (dict)
+    :return: add new edges to G based on P.
+    """
+    for i in G.nodes:
+        for j in G.nodes:
+            if i < j and not G.has_edge(i, j):
+                u = random.random()
+                if u < P[(i, j)]:
+                    G.add_edge(i, j)
 
 
+def build_probabilities_dict(G, probability_function):
+    P = dict()
+    for i in G.nodes:
+        for j in G.nodes:
+            if i < j:
+                P[(i, j)] = probability_function(i, j)
+    return P
 
 
 if __name__ == '__main__':
@@ -116,6 +131,11 @@ if __name__ == '__main__':
     artists_to_promote = [144882, 194647, 511147, 532992]
 
     G = build_graph(instaglam0)
+
+    G_random_test = networkx.Graph(G)
+    for i in range(7):
+        P = build_probabilities_dict(G_random_test, probability_function=lambda x, y: 1 / 100)
+        add_new_edges(G_random_test, P)
 
     for artist in artists_to_promote:
         print(f"artist={artist}")
@@ -125,7 +145,8 @@ if __name__ == '__main__':
             G.nodes[n]["buying probability test"] = 0
             G.nodes[n]["infected test"] = False
 
-        influencers = hill_climbing(G, 5)
+        influencers = hill_climbing(G_random_test, 5)  # every time {468812, 682482, 411093, 308470, 548221}
+        #influencers = [468812, 682482, 411093, 308470, 548221]  # results: 894, 816, 756, 999
         print(f"influencers: {influencers}\n")
         infected_cnt = 5
         infected_list = [i for i in influencers]
@@ -135,11 +156,11 @@ if __name__ == '__main__':
         for t in range(1, 7):
             for node in G.nodes:
                 u = random.random()
-                if G.nodes[node]["buying probability"] > u and G.nodes[node]["infected"] == False:
+                if G.nodes[node]["buying probability"] > u and G.nodes[node]["infected"] is False:
                     G.nodes[node]["infected"] = True
                     infected_cnt += 1
                     infected_list.append(node)
+            P = build_probabilities_dict(G, probability_function=lambda x, y: 1 / 100)
+            add_new_edges(G, P)
             calc_buying_probability(G, spotifly, artist, G.nodes)
             print(f"infected at time {t}: {infected_cnt}")
-            #print(infected_list)
-
