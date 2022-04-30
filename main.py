@@ -125,7 +125,6 @@ def friendly_popularity_index(G_0, G_1, u, v):
     v_friendly = (G_0.degree(v) - G_1.degree(v)) / G_0.degree(v)
     v_popularity = G_1.degree(u) / G_1.number_of_nodes()
     chance_to_meet = len(set(G_1.neighbors(u)).intersection(set(G_1.neighbors(v)))) / len((set(G_1.neighbors(u)).union(set(G_1.neighbors(v)))))
-    #print("chance to meet:", chance_to_meet)
     return (u_friendly + u_popularity) * (v_friendly + v_popularity) * chance_to_meet
 
 
@@ -145,11 +144,11 @@ if __name__ == '__main__':
         P = build_probabilities_dict(G_random_test, probability_function=friendly_popularity_index)
         add_new_edges(G_random_test, P)
 
-    """# todo: think how to factorize elements of friendly_popularity_index since we would like to factor the number of
+    # todo: think how to factorize elements of friendly_popularity_index since we would like to factor the number of
     #  edges at each iter by 14324 / 12712 =~ 1.12 
-    print("G_1: ", G_1)  # 12712 edges
-    print("G_0: ", G_0)  # 14324 edges
-    print("G_random_test: ", G_random_test)  # 15127 edges"""
+    # print("G_1: ", G_1)  # 12712 edges
+    # print("G_0: ", G_0)  # 14324 edges
+    # print("G_random_test: ", G_random_test)  # 15127 edges
 
     # initialization of properties foreach node
     for artist in artists_to_promote:
@@ -162,7 +161,7 @@ if __name__ == '__main__':
             filt = (spotifly['userID'] == n) & (spotifly[' artistID'] == artist)
             G_0.nodes[n]["h"] = 0 if spotifly.loc[filt, '#plays'].empty else list(spotifly.loc[filt, '#plays'])[0]
 
-        influencers = hill_climbing(G_random_test, 5)  # every time {468812, 682482, 411093, 874459, 548221}
+        influencers = hill_climbing(G_random_test, 5)
         print(f"influencers: {influencers}")
         infected_cnt = 5
         for influncer in influencers:
