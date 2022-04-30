@@ -1,5 +1,3 @@
-import networkx
-import numpy as np
 import networkx as nx
 import random
 import pandas as pd
@@ -12,31 +10,31 @@ def load_data():
     return instaglam0, instaglam_1, spotifly
 
 
-def build_graph(instaglam0):
+def build_graph(instaglam):
     G = nx.Graph()
-    users = set(instaglam0['userID'].values)
-    friends = set(instaglam0['friendID'].values)
+    users = set(instaglam['userID'].values)
+    friends = set(instaglam['friendID'].values)
     members = users.union(friends)
     for m in members:
         G.add_node(m)
-    for i, j in zip(instaglam0['userID'].values, instaglam0['friendID'].values):
+    for i, j in zip(instaglam['userID'].values, instaglam['friendID'].values):
         G.add_edge(i, j)
     nx.set_node_attributes(G, 0, name="buying probability")
     nx.set_node_attributes(G, False, name="infected")
     nx.set_node_attributes(G, 0, name="buying probability test")
     nx.set_node_attributes(G, False, name="infected test")
+    nx.set_node_attributes(G, 0, name="h")
     return G
 
 
-def calc_buying_probability(G, spotifly, artistID, nodes_group, test_flag=False):
+def calc_buying_probability(G, nodes_group, test_flag=False):
     for n in nodes_group:
         nt = G.degree(n)
+        h = G.nodes[n]["h"]
         if test_flag:
             bt = len([v for v in G.neighbors(n) if G.nodes[v]["infected test"]])
         else:
             bt = len([v for v in G.neighbors(n) if G.nodes[v]["infected"]])
-        filt = (spotifly['userID'] == n) & (spotifly[' artistID'] == artistID)
-        h = 0 if spotifly.loc[filt, '#plays'].empty else list(spotifly.loc[filt, '#plays'])[0]
         if test_flag:
             if h == 0:
                 G.nodes[n]["buying probability test"] = bt / nt
@@ -60,8 +58,7 @@ def IC(S, G):
     for s in S:
         G.nodes[s]["infected test"] = True
     test_group = set([j for s in S for j in G.neighbors(s)])
-    # print("test_group:", test_group)
-    calc_buying_probability(G, spotifly, artist, test_group, test_flag=True)
+    calc_buying_probability(G, test_group, test_flag=True)
     visited_neighbors = set()
     for s in S:
         for n in G.neighbors(s):
@@ -70,7 +67,6 @@ def IC(S, G):
                 visited_neighbors.add(n)
     for s in S:
         G.nodes[s]["infected test"] = False
-    # print("IC =", influence_cone)
     return influence_cone
 
 
@@ -95,19 +91,16 @@ def hill_climbing(G, k):
             if mv > max_mv:
                 max_mv = mv
                 argmax_mv = v
-                # print(f"We have a new max = {max_mv} and new argmax_mv = {argmax_mv}. This is iter {i}")
-                # print(f"argmax {argmax_mv} has {G.degree(argmax_mv)}")
         S.add(argmax_mv)
-    # print("S:", S)
     return S
 
 
-def add_new_edges(G: networkx.Graph, P):
+def add_new_edges(G: nx.Graph, P):
     """
-    add new edges to graph G based on new edges probability matrix P
+    add new edges to graph G_0 based on new edges probability matrix P
     :param G: instaglam graph at time t=0
     :param P: new edges probability matrix (dict)
-    :return: add new edges to G based on P.
+    :return: add new edges to G_0 based on P.
     """
     for i in G.nodes:
         for j in G.nodes:
@@ -122,45 +115,75 @@ def build_probabilities_dict(G, probability_function):
     for i in G.nodes:
         for j in G.nodes:
             if i < j:
-                P[(i, j)] = probability_function(i, j)
+                P[(i, j)] = probability_function(G_0, G_1, i, j)
     return P
 
 
+def friendly_popularity_index(G_0, G_1, u, v):
+    u_friendly = (G_0.degree(u) - G_1.degree(u)) / G_0.degree(u)
+    u_popularity = G_1.degree(u) / G_1.number_of_nodes()
+    v_friendly = (G_0.degree(v) - G_1.degree(v)) / G_0.degree(v)
+    v_popularity = G_1.degree(u) / G_1.number_of_nodes()
+    chance_to_meet = len(set(G_1.neighbors(u)).intersection(set(G_1.neighbors(v)))) / len((set(G_1.neighbors(u)).union(set(G_1.neighbors(v)))))
+    #print("chance to meet:", chance_to_meet)
+    return (u_friendly + u_popularity) * (v_friendly + v_popularity) * chance_to_meet
+
+
 if __name__ == '__main__':
+
     instaglam0, instaglam_1, spotifly = load_data()
+    # if we run the simulation for each artist separately we get better results. why?
     artists_to_promote = [144882, 194647, 511147, 532992]
 
-    G = build_graph(instaglam0)
+    G_0 = build_graph(instaglam0)
+    G_1 = build_graph(instaglam_1)
+    G_random_test = nx.Graph(G_0)
 
-    G_random_test = networkx.Graph(G)
+    # simulate creation of new edges
     for i in range(7):
-        P = build_probabilities_dict(G_random_test, probability_function=lambda x, y: 1 / 100)
+        #P = build_probabilities_dict(G_random_test, probability_function=lambda w, x, y, z: 0.001)
+        P = build_probabilities_dict(G_random_test, probability_function=friendly_popularity_index)
         add_new_edges(G_random_test, P)
 
+    """# todo: think how to factorize elements of friendly_popularity_index since we would like to factor the number of
+    #  edges at each iter by 14324 / 12712 =~ 1.12 
+    print("G_1: ", G_1)  # 12712 edges
+    print("G_0: ", G_0)  # 14324 edges
+    print("G_random_test: ", G_random_test)  # 15127 edges"""
+
+    # initialization of properties foreach node
     for artist in artists_to_promote:
         print(f"artist={artist}")
-        for n in G.nodes:
-            G.nodes[n]["buying probability"] = 0
-            G.nodes[n]["infected"] = False
-            G.nodes[n]["buying probability test"] = 0
-            G.nodes[n]["infected test"] = False
+        for n in G_0.nodes:
+            G_0.nodes[n]["buying probability"] = 0
+            G_0.nodes[n]["infected"] = False
+            G_0.nodes[n]["buying probability test"] = 0
+            G_0.nodes[n]["infected test"] = False
+            filt = (spotifly['userID'] == n) & (spotifly[' artistID'] == artist)
+            G_0.nodes[n]["h"] = 0 if spotifly.loc[filt, '#plays'].empty else list(spotifly.loc[filt, '#plays'])[0]
 
-        influencers = hill_climbing(G_random_test, 5)  # every time {468812, 682482, 411093, 308470, 548221}
-        #influencers = [468812, 682482, 411093, 308470, 548221]  # results: 894, 816, 756, 999
-        print(f"influencers: {influencers}\n")
+        influencers = hill_climbing(G_random_test, 5)  # every time {468812, 682482, 411093, 874459, 548221}
+        print(f"influencers: {influencers}")
         infected_cnt = 5
-        infected_list = [i for i in influencers]
         for influncer in influencers:
-            G.nodes[influncer]["infected"] = True
-        calc_buying_probability(G, spotifly, artist, G.nodes)
+            G_0.nodes[influncer]["infected"] = True
+
+        # calc buying probability at time=0
+        calc_buying_probability(G_0, G_0.nodes)
+
+        # start simulation on network at time=0, do 6 iterations
         for t in range(1, 7):
-            for node in G.nodes:
+            # check foreach node if it got infected
+            for node in G_0.nodes:
                 u = random.random()
-                if G.nodes[node]["buying probability"] > u and G.nodes[node]["infected"] is False:
-                    G.nodes[node]["infected"] = True
+                if G_0.nodes[node]["buying probability"] > u and G_0.nodes[node]["infected"] is False:
+                    G_0.nodes[node]["infected"] = True
                     infected_cnt += 1
-                    infected_list.append(node)
-            P = build_probabilities_dict(G, probability_function=lambda x, y: 1 / 100)
-            add_new_edges(G, P)
-            calc_buying_probability(G, spotifly, artist, G.nodes)
             print(f"infected at time {t}: {infected_cnt}")
+            # add new edges to graph according probability function
+            #P = build_probabilities_dict(G_0, probability_function=lambda w, x, y, z: 0.001)
+            P = build_probabilities_dict(G_random_test, probability_function=friendly_popularity_index)
+            add_new_edges(G_0, P)
+            # calc buying probability at time=t
+            calc_buying_probability(G_0, G_0.nodes)
+        print()
