@@ -110,22 +110,66 @@ def add_new_edges(G: nx.Graph, P):
                     G.add_edge(i, j)
 
 
-def build_probabilities_dict(G, probability_function):
+def build_probabilities_dict(G, probability_function, hist=None):
     P = dict()
     for i in G.nodes:
         for j in G.nodes:
             if i < j:
-                P[(i, j)] = probability_function(G_0, G_1, i, j)
+                P[(i, j)] = probability_function(G_0, G_1, i, j, hist)
     return P
 
 
-def friendly_popularity_index(G_0, G_1, u, v):
+def friendly_popularity_index(G_0, G_1, u, v, hist=None):
     u_friendly = (G_0.degree(u) - G_1.degree(u)) / G_0.degree(u)
     u_popularity = G_1.degree(u) / G_1.number_of_nodes()
     v_friendly = (G_0.degree(v) - G_1.degree(v)) / G_0.degree(v)
     v_popularity = G_1.degree(u) / G_1.number_of_nodes()
     chance_to_meet = len(set(G_1.neighbors(u)).intersection(set(G_1.neighbors(v)))) / len((set(G_1.neighbors(u)).union(set(G_1.neighbors(v)))))
-    return (u_friendly + u_popularity) * (v_friendly + v_popularity) * chance_to_meet
+    # print(f"chance = {chance_to_meet}")
+    res = (u_friendly + v_friendly) * chance_to_meet
+    # print(f"res = {res}")
+    return res
+
+
+def common_neighbors_index(G_0, G_1, u, v, hist):
+
+    """hist = {}
+    max_degree = sorted(G_1.degree, key=lambda x: x[1], reverse=True)[0][1]
+    for i in range(max_degree + 1):
+        hist[i] = 0
+
+    for ed in G_0.edges:
+        if ed not in G_1.edges:  # means that edge was formed between t=-1 and t=0
+            x = ed[0]
+            y = ed[1]
+            common_num = len(set((nx.common_neighbors(G_1, x, y))))
+            hist[common_num] += 1
+    total_new_edges = sum(hist.values())
+
+    for i in range(max_degree + 1):
+        hist[i] = hist[i] / total_new_edges"""
+    common_neighbors = len(set(nx.common_neighbors(G_1, u, v)))
+    return hist[common_neighbors]
+
+
+def create_hist(G_0, G_1):
+    hist = {}
+    max_degree = sorted(G_1.degree, key=lambda x: x[1], reverse=True)[0][1]
+    for i in range(max_degree + 1):
+        hist[i] = 0
+
+    for ed in G_0.edges:
+        if ed not in G_1.edges:  # means that edge was formed between t=-1 and t=0
+            x = ed[0]
+            y = ed[1]
+            common_num = len(set((nx.common_neighbors(G_1, x, y))))
+            hist[common_num] += 1
+    total_new_edges = sum(hist.values())
+
+    for i in range(max_degree + 1):
+        hist[i] = hist[i] / total_new_edges
+
+    return hist
 
 
 if __name__ == '__main__':
@@ -137,18 +181,23 @@ if __name__ == '__main__':
     G_0 = build_graph(instaglam0)
     G_1 = build_graph(instaglam_1)
     G_random_test = nx.Graph(G_0)
+    G_random_prev = nx.Graph(G_1)
 
     # simulate creation of new edges
     for i in range(7):
         #P = build_probabilities_dict(G_random_test, probability_function=lambda w, x, y, z: 0.001)
-        P = build_probabilities_dict(G_random_test, probability_function=friendly_popularity_index)
+        #P = build_probabilities_dict(G_random_test, probability_function=friendly_popularity_index)
+        hist = create_hist(G_0=G_random_test, G_1=G_random_prev)
+        P = build_probabilities_dict(G_random_test, probability_function=common_neighbors_index, hist=hist)
+        G_random_prev = nx.Graph(G_random_test)
         add_new_edges(G_random_test, P)
+
 
     # todo: think how to factorize elements of friendly_popularity_index since we would like to factor the number of
     #  edges at each iter by 14324 / 12712 =~ 1.12 
-    # print("G_1: ", G_1)  # 12712 edges
-    # print("G_0: ", G_0)  # 14324 edges
-    # print("G_random_test: ", G_random_test)  # 15127 edges
+    print("G_1: ", G_1)  # 12712 edges
+    print("G_0: ", G_0)  # 14324 edges
+    print("G_random_test: ", G_random_test)  # 15127 edges
 
     # initialization of properties foreach node
     for artist in artists_to_promote:
@@ -181,7 +230,7 @@ if __name__ == '__main__':
             print(f"infected at time {t}: {infected_cnt}")
             # add new edges to graph according probability function
             #P = build_probabilities_dict(G_0, probability_function=lambda w, x, y, z: 0.001)
-            P = build_probabilities_dict(G_random_test, probability_function=friendly_popularity_index)
+            P = build_probabilities_dict(G_random_test, probability_function=common_neighbors_index, hist=hist)
             add_new_edges(G_0, P)
             # calc buying probability at time=t
             calc_buying_probability(G_0, G_0.nodes)
