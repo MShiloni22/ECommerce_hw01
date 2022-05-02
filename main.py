@@ -129,7 +129,7 @@ def build_probabilities_dict(G, probability_function, hist=None):
     P[(i,j)] = the probability that an edge will be formed between i, j according to G
     :param G: network graph
     :param probability_function: probability for each two nodes i, j to become friends at the network
-    :param hist: relevent only if probability_function == common_neighbors_index. view this function's docstring
+    :param hist: relevant only if probability_function == common_neighbors_index. view this function's docstring
                  for more details.
     :return: matrix P of new edge probability for every two nodes i, j
     """
@@ -170,9 +170,11 @@ def friendly_index(G_0, G_1, u, v, hist=None):
     ==> u_friendly + v_friendly < 1
     ==> (u_friendly + v_friendly) * chance_to_meet <= 1
     """
-    # todo: maybe u_popularity should be G_1.degree(u) / G_1.node_with_max_degree ???
+
     u_friendly = (G_0.degree(u) - G_1.degree(u)) / G_0.degree(u)
-    # u_popularity = G_1.degree(u) / G_1.number_of_nodes()
+    # u_popularity = G_1.degree(u) / G_1.number_of_nodes() -
+    # we have also considered u_popularity may be G_1.degree(u) / G_1.node_with_max_degree, but dacided not to use
+    # this popularity index as well
     v_friendly = (G_0.degree(v) - G_1.degree(v)) / G_0.degree(v)
     # v_popularity = G_1.degree(u) / G_1.number_of_nodes()
     chance_to_meet = len(set(G_1.neighbors(u)).intersection(set(G_1.neighbors(v)))) \
@@ -244,7 +246,7 @@ def prob_p_forall_index(p):
 if __name__ == '__main__':
 
     # input variables: edit these vars
-    artist_to_promote = 194647  # our artists are [144882, 194647, 511147, 532992]
+    artist_to_promote = 511147  # our artists are [144882, 194647, 511147, 532992]
     new_edges_method = common_neighbors_index
     finish_without_simulation = False  # if True the simulation itself will not run (time saving)
 
