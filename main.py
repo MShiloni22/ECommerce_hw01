@@ -249,81 +249,157 @@ def prob_p_forall_index(p):
 if __name__ == '__main__':
 
     # input variables: edit these vars
-    artist_to_promote = [144882, 194647, 511147, 532992]  # our artists are [144882, 194647, 511147, 532992]
-    new_edges_method = prob_p_forall_index(1/800)
+    artist = 532992  # our artists are [144882, 194647, 511147, 532992]
+    influencers_list = [[117383, 308470, 994520, 197117, 457566],
+                   [32806, 117383, 40242, 197117, 457566],
+                   [117383, 994520, 961018, 197117, 457566],
+                   [117383, 74425, 961018, 197117, 457566]]
+    new_edges_method_list = [common_neighbors_index, friendly_index, prob_p_forall_index(1/800), prob_p_forall_index(0)]
     finish_without_simulation = False  # if True the simulation itself will not run (time saving)
 
-    for artist in artist_to_promote:
+    for influencers in influencers_list:
+        for new_edges_method in new_edges_method_list:
 
-        print(f"artist: {artist}")
-        print(f"new edges method: {new_edges_method.__name__}")
+            print(f"artist: {artist}")
+            print(f"new edges method: {new_edges_method.__name__}")
 
-        print("loading data...")
-        instaglam0, instaglam_1, spotifly = load_data()
+            print("loading data...")
+            instaglam0, instaglam_1, spotifly = load_data()
 
-        # build graphs
-        print("building network...")
-        G_1 = build_graph(instaglam_1)  # graph at time=-1
-        G_0 = build_graph(instaglam0)  # graph at time=0
-        for n in G_0.nodes:  # initialization of properties foreach node
-            G_0.nodes[n]["buying probability"] = 0
-            G_0.nodes[n]["infected"] = False
-            G_0.nodes[n]["buying probability test"] = 0
-            G_0.nodes[n]["infected test"] = False
-            filt = (spotifly['userID'] == n) & (spotifly[' artistID'] == artist)
-            G_0.nodes[n]["h"] = 0 if spotifly.loc[filt, '#plays'].empty else list(spotifly.loc[filt, '#plays'])[0]
+            # build graphs
+            print("building network...")
+            G_1 = build_graph(instaglam_1)  # graph at time=-1
+            G_0 = build_graph(instaglam0)  # graph at time=0
+            for n in G_0.nodes:  # initialization of properties foreach node
+                G_0.nodes[n]["buying probability"] = 0
+                G_0.nodes[n]["infected"] = False
+                G_0.nodes[n]["buying probability test"] = 0
+                G_0.nodes[n]["infected test"] = False
+                filt = (spotifly['userID'] == n) & (spotifly[' artistID'] == artist)
+                G_0.nodes[n]["h"] = 0 if spotifly.loc[filt, '#plays'].empty else list(spotifly.loc[filt, '#plays'])[0]
 
-        # simulate creation of new edges in the graph
-        G_random = nx.Graph(G_0)
-        G_random_prev = nx.Graph(G_1)
-        histogram = None
-        if new_edges_method != prob_p_forall_index(0):
-            print("simulating creation of new edges in the network...")
-            for i in range(7):
-                if new_edges_method != common_neighbors_index:
-                    P = build_probabilities_dict(G_random, probability_function=new_edges_method)
-                else:
-                    histogram = new_edges_by_commoneighbors_histogram(G_0=G_random, G_1=G_random_prev)
-                    P = build_probabilities_dict(G_random, probability_function=common_neighbors_index, hist=histogram)
-                    G_random_prev = nx.Graph(G_random)
-                add_new_edges(G_random, P)
+            # simulate creation of new edges in the graph
+            G_random = nx.Graph(G_0)
+            G_random_prev = nx.Graph(G_1)
+            histogram = None
+            if new_edges_method != prob_p_forall_index(0):
+                print("simulating creation of new edges in the network...")
+                for i in range(7):
+                    if new_edges_method != common_neighbors_index:
+                        P = build_probabilities_dict(G_random, probability_function=new_edges_method)
+                    else:
+                        histogram = new_edges_by_commoneighbors_histogram(G_0=G_random, G_1=G_random_prev)
+                        P = build_probabilities_dict(G_random, probability_function=common_neighbors_index,
+                                                     hist=histogram)
+                        G_random_prev = nx.Graph(G_random)
+                    add_new_edges(G_random, P)
 
-        print("finding influencers...")
-        # find influencers by running HC on the simulated graph
-        influencers = hill_climbing(G_random, 5)
-        # influencers = [548221, 411093, 874459, 441435, 175764]
-        print(f"influencers: {influencers}")
+            print(f"influencers: {influencers}")
 
-        infected_cnt = 5
-        for influncer in influencers:
-            G_0.nodes[influncer]["infected"] = True
+            infected_cnt = 5
+            for influncer in influencers:
+                G_0.nodes[influncer]["infected"] = True
 
-        if finish_without_simulation:
-            sys.exit("Finished without simulating")
+            if finish_without_simulation:
+                sys.exit("Finished without simulating")
 
-        # simulation:
-        print("simulation...")
-        # calc buying probability at time=0
-        calc_buying_probability(G_0, G_0.nodes)
+            # simulation:
+            print("simulation...")
+            # calc buying probability at time=0
+            calc_buying_probability(G_0, G_0.nodes)
 
-        # start simulation on network at time=0, do 6 iterations
-        for t in range(1, 7):
-            # check foreach node if it got infected
-            for node in G_0.nodes:
-                u = random.random()
-                if G_0.nodes[node]["buying probability"] > u and G_0.nodes[node]["infected"] is False:
-                    G_0.nodes[node]["infected"] = True
-                    infected_cnt += 1
-            print(f"infected at time {t}: {infected_cnt}")
-            # add new edges to graph according probability function
-            if t < 6:
-                # build probabilities dict at time=t
-                if new_edges_method != common_neighbors_index:
-                    P = build_probabilities_dict(G_0, probability_function=new_edges_method)
-                else:
-                    P = build_probabilities_dict(G_random, probability_function=common_neighbors_index, hist=histogram)
-                add_new_edges(G_0, P)
-                # calc buying probability at time=t
-                calc_buying_probability(G_0, G_0.nodes)
-        print("####################################")
+            # start simulation on network at time=0, do 6 iterations
+            for t in range(1, 7):
+                # check foreach node if it got infected
+                for node in G_0.nodes:
+                    u = random.random()
+                    if G_0.nodes[node]["buying probability"] > u and G_0.nodes[node]["infected"] is False:
+                        G_0.nodes[node]["infected"] = True
+                        infected_cnt += 1
+                print(f"infected at time {t}: {infected_cnt}")
+                # add new edges to graph according probability function
+                if t < 6:
+                    # build probabilities dict at time=t
+                    if new_edges_method != common_neighbors_index:
+                        P = build_probabilities_dict(G_0, probability_function=new_edges_method)
+                    else:
+                        P = build_probabilities_dict(G_random, probability_function=common_neighbors_index,
+                                                     hist=histogram)
+                    add_new_edges(G_0, P)
+                    # calc buying probability at time=t
+                    calc_buying_probability(G_0, G_0.nodes)
+            print("####################################")
+            print()
         print()
+
+
+    # for artist in artist_to_promote:
+    #
+    #     print(f"artist: {artist}")
+    #     print(f"new edges method: {new_edges_method.__name__}")
+    #
+    #     print("loading data...")
+    #     instaglam0, instaglam_1, spotifly = load_data()
+    #
+    #     # build graphs
+    #     print("building network...")
+    #     G_1 = build_graph(instaglam_1)  # graph at time=-1
+    #     G_0 = build_graph(instaglam0)  # graph at time=0
+    #     for n in G_0.nodes:  # initialization of properties foreach node
+    #         G_0.nodes[n]["buying probability"] = 0
+    #         G_0.nodes[n]["infected"] = False
+    #         G_0.nodes[n]["buying probability test"] = 0
+    #         G_0.nodes[n]["infected test"] = False
+    #         filt = (spotifly['userID'] == n) & (spotifly[' artistID'] == artist)
+    #         G_0.nodes[n]["h"] = 0 if spotifly.loc[filt, '#plays'].empty else list(spotifly.loc[filt, '#plays'])[0]
+    #
+    #     # simulate creation of new edges in the graph
+    #     G_random = nx.Graph(G_0)
+    #     G_random_prev = nx.Graph(G_1)
+    #     histogram = None
+    #     if new_edges_method != prob_p_forall_index(0):
+    #         print("simulating creation of new edges in the network...")
+    #         for i in range(7):
+    #             if new_edges_method != common_neighbors_index:
+    #                 P = build_probabilities_dict(G_random, probability_function=new_edges_method)
+    #             else:
+    #                 histogram = new_edges_by_commoneighbors_histogram(G_0=G_random, G_1=G_random_prev)
+    #                 P = build_probabilities_dict(G_random, probability_function=common_neighbors_index, hist=histogram)
+    #                 G_random_prev = nx.Graph(G_random)
+    #             add_new_edges(G_random, P)
+    #
+    #     influencers = [117383, 308470, 994520, 197117, 457566]
+    #     print(f"influencers: {influencers}")
+    #
+    #     infected_cnt = 5
+    #     for influncer in influencers:
+    #         G_0.nodes[influncer]["infected"] = True
+    #
+    #     if finish_without_simulation:
+    #         sys.exit("Finished without simulating")
+    #
+    #     # simulation:
+    #     print("simulation...")
+    #     # calc buying probability at time=0
+    #     calc_buying_probability(G_0, G_0.nodes)
+    #
+    #     # start simulation on network at time=0, do 6 iterations
+    #     for t in range(1, 7):
+    #         # check foreach node if it got infected
+    #         for node in G_0.nodes:
+    #             u = random.random()
+    #             if G_0.nodes[node]["buying probability"] > u and G_0.nodes[node]["infected"] is False:
+    #                 G_0.nodes[node]["infected"] = True
+    #                 infected_cnt += 1
+    #         print(f"infected at time {t}: {infected_cnt}")
+    #         # add new edges to graph according probability function
+    #         if t < 6:
+    #             # build probabilities dict at time=t
+    #             if new_edges_method != common_neighbors_index:
+    #                 P = build_probabilities_dict(G_0, probability_function=new_edges_method)
+    #             else:
+    #                 P = build_probabilities_dict(G_random, probability_function=common_neighbors_index, hist=histogram)
+    #             add_new_edges(G_0, P)
+    #             # calc buying probability at time=t
+    #             calc_buying_probability(G_0, G_0.nodes)
+    #     print("####################################")
