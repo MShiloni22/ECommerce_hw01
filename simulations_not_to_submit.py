@@ -372,8 +372,8 @@ if __name__ == '__main__':
     #     print(f"influencers: {influencers}")
     #
     #     infected_cnt = 5
-    #     for influncer in influencers:
-    #         G_0.nodes[influncer]["infected"] = True
+    #     for influencer in influencers:
+    #         G_0.nodes[influencer]["infected"] = True
     #
     #     if finish_without_simulation:
     #         sys.exit("Finished without simulating")
